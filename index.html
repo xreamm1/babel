@@ -8,7 +8,7 @@
   html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
   canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
   #c, #movers { position: fixed; top: 0; left: 0; }
-  #movers { mix-blend-mode: screen; pointer-events: none; }
+  #movers { mix-blend-mode: screen; pointer-events: none; image-rendering: pixelated; }
 </style>
 </head>
 <body>
@@ -114,27 +114,50 @@ function drawTimer(W, H) {
   ctx.fillText(String(timeLeft).padStart(2, '0'), H * 0.015, H * 0.015);
 }
 
-// "залипшие" пиксели — несколько точек держат один цвет пару кадров
-const stuckPixels = new Map();
-function updateStuckPixels(W, H) {
-  for (const [key, p] of stuckPixels) {
-    p.life--;
-    if (p.life <= 0) stuckPixels.delete(key);
+// точки, которые "залипают" каждую секунду — именно они движутся и отскакивают от стен
+const MAX_LIVE_POINTS = 40;
+const livePoints = [];
+
+function spawnLivePoints() {
+  for (let i = livePoints.length - 1; i >= 0; i--) {
+    livePoints[i].life--;
+    if (livePoints[i].life <= 0) livePoints.splice(i, 1);
   }
-  if (Math.random() < 0.4) {
-    const n = 5 + Math.floor(Math.random() * 20);
+  if (Math.random() < 0.6) {
+    const n = 3 + Math.floor(Math.random() * 10);
     for (let i = 0; i < n; i++) {
-      const gx = Math.floor(Math.random() * W);
-      const gy = Math.floor(Math.random() * H);
-      stuckPixels.set(`${gx},${gy}`, {
-        r: Math.random() < 0.5 ? 255 : 0,
-        g: Math.random() < 0.5 ? 255 : 0,
-        b: Math.random() < 0.5 ? 255 : 0,
+      if (livePoints.length >= MAX_LIVE_POINTS) livePoints.shift();
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 0.4 + Math.random() * 1.2;
+      livePoints.push({
+        x: Math.random() * movers.width,
+        y: Math.random() * movers.height,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        color: `${Math.random() * 255 | 0},${Math.random() * 255 | 0},${Math.random() * 255 | 0}`,
         life: 2 + Math.floor(Math.random() * 3),
       });
     }
   }
 }
+
+function moversLoop() {
+  const W = movers.width, H = movers.height;
+  mctx.clearRect(0, 0, W, H);
+  for (const p of livePoints) {
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.x < 0) { p.x = 0; p.vx *= -1; }
+    else if (p.x > W) { p.x = W; p.vx *= -1; }
+    if (p.y < 0) { p.y = 0; p.vy *= -1; }
+    else if (p.y > H) { p.y = H; p.vy *= -1; }
+
+    mctx.fillStyle = `rgb(${p.color})`;
+    mctx.fillRect(p.x, p.y, 3, 3);
+  }
+  requestAnimationFrame(moversLoop);
+}
+moversLoop();
 
 // переиспользуем один и тот же буфер вместо аллокации каждую секунду
 let cachedImg = null;
@@ -181,14 +204,9 @@ function paint() {
     }
   }
 
-  // "залипшие" пиксели — точечно, без прохода по всему экрану
-  updateStuckPixels(W, H);
-  for (const [key, p] of stuckPixels) {
-    const [gx, gy] = key.split(',');
-    buf32[Number(gy) * W + Number(gx)] = 0xff000000 | (p.b << 16) | (p.g << 8) | p.r;
-  }
-
   ctx.putImageData(img, 0, 0);
+
+  spawnLivePoints();
 
   // виньетка для атмосферы
   const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.75);
@@ -269,39 +287,6 @@ function blackout() {
     setTimeout(startCycle, 1500);
   }, 2000);
 }
-
-// точки: каждая летит в свою случайную сторону и отскакивает от стен
-const MOVER_COUNT = 250;
-const moverDots = [];
-for (let i = 0; i < MOVER_COUNT; i++) {
-  const angle = Math.random() * Math.PI * 2;
-  const speed = 0.6 + Math.random() * 1.4;
-  moverDots.push({
-    x: Math.random() * window.innerWidth,
-    y: Math.random() * window.innerHeight,
-    vx: Math.cos(angle) * speed,
-    vy: Math.sin(angle) * speed,
-    color: `${Math.random() * 255 | 0},${Math.random() * 255 | 0},${Math.random() * 255 | 0}`,
-  });
-}
-
-function moversLoop() {
-  const W = movers.width, H = movers.height;
-  mctx.clearRect(0, 0, W, H);
-  for (const p of moverDots) {
-    p.x += p.vx;
-    p.y += p.vy;
-    if (p.x < 0) { p.x = 0; p.vx *= -1; }
-    else if (p.x > W) { p.x = W; p.vx *= -1; }
-    if (p.y < 0) { p.y = 0; p.vy *= -1; }
-    else if (p.y > H) { p.y = H; p.vy *= -1; }
-
-    mctx.fillStyle = `rgb(${p.color})`;
-    mctx.fillRect(p.x, p.y, 2, 2);
-  }
-  requestAnimationFrame(moversLoop);
-}
-moversLoop();
 
 startCycle();
 </script>
