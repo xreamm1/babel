@@ -86,13 +86,14 @@ const PIXEL = 1; // 1 внутренний пиксель = 0.5 CSS-пиксел
 
 function paint() {
   const W = canvas.width, H = canvas.height;
+  canvas.style.filter = `hue-rotate(${Math.floor(Math.random() * 360)}deg)`;
   const pixel = PIXEL;
   const gw = Math.ceil(W / pixel), gh = Math.ceil(H / pixel);
 
   drawText();
   const mask = tctx.getImageData(0, 0, W, H).data;
 
-  const boost = 10 + Math.random() * 8;
+  const boost = 22 + Math.random() * 12;
   const hue = Math.random() * Math.PI * 2;
   const boostR = boost * (0.5 + 0.5 * Math.cos(hue));
   const boostG = boost * (0.5 + 0.5 * Math.cos(hue - 2.094));
