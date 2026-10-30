@@ -48,10 +48,11 @@ function drawText() {
   tctx.fillText('IS COMING', cx, cy + h * 0.06);
 }
 
+const PIXEL = 2;
+
 function paint() {
   const W = canvas.width, H = canvas.height;
-  // чаще мелкое зерно (много точек), изредка крупное
-  const pixel = 1 + Math.floor(Math.pow(Math.random(), 3) * (maxPixel - 1));
+  const pixel = PIXEL;
   const gw = Math.ceil(W / pixel), gh = Math.ceil(H / pixel);
 
   drawText();
