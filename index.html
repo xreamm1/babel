@@ -168,8 +168,10 @@ function drawFlicker() {
   tmp.getContext('2d').putImageData(img, 0, 0);
 
   fctx.imageSmoothingEnabled = false;
-  fctx.clearRect(0, 0, W, H);
+  // старый кадр не стирается полностью — остаётся лёгкий шлейф/послеобраз
+  fctx.globalAlpha = 0.6;
   fctx.drawImage(tmp, 0, 0, gw, gh, 0, 0, W, H);
+  fctx.globalAlpha = 1;
   requestAnimationFrame(drawFlicker);
 }
 
