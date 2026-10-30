@@ -14,33 +14,70 @@
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
-const PIXEL = 2; // размер "зерна" шума
+ctx.imageSmoothingEnabled = false;
+
+const text = document.createElement('canvas');
+const tctx = text.getContext('2d');
+
+let maxPixel = 1;
 
 function resize() {
-  canvas.width = Math.ceil(window.innerWidth / PIXEL);
-  canvas.height = Math.ceil(window.innerHeight / PIXEL);
+  const w = window.innerWidth, h = window.innerHeight;
+  canvas.width = w;
+  canvas.height = h;
+  text.width = w;
+  text.height = h;
+
+  tctx.clearRect(0, 0, w, h);
+  tctx.fillStyle = '#fff';
+  tctx.textAlign = 'center';
+  tctx.textBaseline = 'middle';
+  tctx.font = `bold ${Math.round(w / 9)}px sans-serif`;
+  tctx.fillText('SOMETHING', w / 2, h / 2 - h * 0.06);
+  tctx.fillText('IS COMING', w / 2, h / 2 + h * 0.06);
+
+  // максимальный размер зерна, при котором точек ещё не меньше 1000
+  maxPixel = Math.max(1, Math.floor(Math.sqrt((w * h) / 1000)));
 }
-window.addEventListener('resize', () => { resize(); paint(); });
+window.addEventListener('resize', resize);
 resize();
 
 function paint() {
-  const w = canvas.width, h = canvas.height;
-  const img = ctx.createImageData(w, h);
+  const W = canvas.width, H = canvas.height;
+  const pixel = Math.max(1, Math.floor(Math.random() * maxPixel) + 1);
+  const gw = Math.ceil(W / pixel), gh = Math.ceil(H / pixel);
+
+  const mask = tctx.getImageData(0, 0, W, H).data;
+
+  const img = ctx.createImageData(gw, gh);
   const data = img.data;
-  for (let i = 0; i < data.length; i += 4) {
-    data[i] = Math.random() * 256;
-    data[i + 1] = Math.random() * 256;
-    data[i + 2] = Math.random() * 256;
-    data[i + 3] = 255;
+  for (let gy = 0; gy < gh; gy++) {
+    for (let gx = 0; gx < gw; gx++) {
+      const px = Math.min(W - 1, gx * pixel);
+      const py = Math.min(H - 1, gy * pixel);
+      const mi = (py * W + px) * 4;
+      const onText = mask[mi + 3] > 0;
+      const boost = onText ? 70 : 0;
+
+      const i = (gy * gw + gx) * 4;
+      data[i] = Math.min(255, Math.random() * 256 + boost);
+      data[i + 1] = Math.min(255, Math.random() * 256 + boost);
+      data[i + 2] = Math.min(255, Math.random() * 256 + boost);
+      data[i + 3] = 255;
+    }
   }
-  ctx.putImageData(img, 0, 0);
+
+  const tmp = document.createElement('canvas');
+  tmp.width = gw;
+  tmp.height = gh;
+  tmp.getContext('2d').putImageData(img, 0, 0);
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(tmp, 0, 0, gw, gh, 0, 0, W, H);
 }
 
-function loop() {
-  paint();
-  setTimeout(loop, Math.random() * 9000 + 1000);
-}
-loop();
+paint();
+setInterval(paint, 1000);
 </script>
 </body>
 </html>
