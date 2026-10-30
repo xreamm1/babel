@@ -88,6 +88,42 @@ function drawAddress(W, H) {
   ctx.fillText(randomAddress(), W - H * 0.015, H - H * 0.015);
 }
 
+function drawTimer(W, H) {
+  ctx.font = `${Math.round(H * 0.018)}px monospace`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillText(String(timeLeft).padStart(2, '0'), H * 0.015, H * 0.015);
+}
+
+// волна от клика/тапа
+const ripples = [];
+function addRipple(x, y) {
+  const wasEmpty = ripples.length === 0;
+  ripples.push({ x: x * SCALE, y: y * SCALE, start: performance.now() });
+  if (wasEmpty) requestAnimationFrame(() => drawRipples(canvas.width, canvas.height));
+}
+canvas.addEventListener('pointerdown', e => addRipple(e.clientX, e.clientY));
+
+function drawRipples(W, H) {
+  const now = performance.now();
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const r = ripples[i];
+    const t = (now - r.start) / 700;
+    if (t >= 1) { ripples.splice(i, 1); continue; }
+    const radius = t * H * 0.35;
+    ctx.save();
+    ctx.globalAlpha = 1 - t;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = H * 0.004;
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  if (ripples.length) requestAnimationFrame(() => drawRipples(canvas.width, canvas.height));
+}
+
 // "залипшие" пиксели — несколько точек держат один цвет пару кадров
 const stuckPixels = new Map();
 function updateStuckPixels(W, H) {
@@ -171,6 +207,7 @@ function paint() {
   if (Math.random() < 0.12) glitch(W, H);
 
   drawAddress(W, H);
+  drawTimer(W, H);
 }
 
 function glitch(W, H) {
@@ -188,8 +225,42 @@ function glitch(W, H) {
   ctx.restore();
 }
 
-paint();
-setInterval(paint, 1000);
+let timeLeft = 30;
+let paintTimer = null;
+let countdownTimer = null;
+
+function startCycle() {
+  timeLeft = 30;
+  paint();
+  paintTimer = setInterval(paint, 1000);
+  countdownTimer = setInterval(() => {
+    timeLeft--;
+    if (timeLeft <= 0) blackout();
+  }, 1000);
+}
+
+function blackout() {
+  clearInterval(paintTimer);
+  clearInterval(countdownTimer);
+  canvas.style.filter = 'none';
+
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  setTimeout(() => {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(W / 2, H / 2, H * 0.004, 0, Math.PI * 2);
+    ctx.fill();
+
+    setTimeout(startCycle, 3000);
+  }, 2000);
+}
+
+startCycle();
 </script>
 </body>
 </html>
