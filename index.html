@@ -19,17 +19,14 @@ ctx.imageSmoothingEnabled = false;
 const text = document.createElement('canvas');
 const tctx = text.getContext('2d');
 
-let maxPixel = 1;
+const SCALE = 2; // внутреннее разрешение x2, чтобы зерно было 0.5 CSS-пикселя
 
 function resize() {
-  const w = window.innerWidth, h = window.innerHeight;
+  const w = window.innerWidth * SCALE, h = window.innerHeight * SCALE;
   canvas.width = w;
   canvas.height = h;
   text.width = w;
   text.height = h;
-
-  // максимальный размер зерна, при котором точек ещё не меньше 1000
-  maxPixel = Math.max(1, Math.floor(Math.sqrt((w * h) / 1000)));
 }
 window.addEventListener('resize', resize);
 resize();
@@ -48,7 +45,7 @@ function drawText() {
   tctx.fillText('IS COMING', cx, cy + h * 0.06);
 }
 
-const PIXEL = 4;
+const PIXEL = 1; // 1 внутренний пиксель = 0.5 CSS-пикселя
 
 function paint() {
   const W = canvas.width, H = canvas.height;
