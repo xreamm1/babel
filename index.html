@@ -105,22 +105,34 @@ function addRipple(x, y) {
 }
 canvas.addEventListener('pointerdown', e => addRipple(e.clientX, e.clientY));
 
+const WAVE_CHARS = '01XO+*#%&$ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
 function drawRipples(W, H) {
   const now = performance.now();
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `bold ${Math.round(H * 0.02)}px monospace`;
+
   for (let i = ripples.length - 1; i >= 0; i--) {
     const r = ripples[i];
-    const t = (now - r.start) / 700;
+    const t = (now - r.start) / 900;
     if (t >= 1) { ripples.splice(i, 1); continue; }
     const radius = t * H * 0.35;
-    ctx.save();
-    ctx.globalAlpha = 1 - t;
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = H * 0.004;
-    ctx.beginPath();
-    ctx.arc(r.x, r.y, radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
+    const count = Math.max(8, Math.floor(radius / (H * 0.025)));
+    for (let a = 0; a < count; a++) {
+      const angle = (a / count) * Math.PI * 2 + t * 3;
+      const x = r.x + Math.cos(angle) * radius;
+      const y = r.y + Math.sin(angle) * radius;
+      // символы мерцают: то темнеют, то светлеют
+      const flicker = 0.4 + 0.6 * Math.abs(Math.sin(now / 90 + a * 1.7));
+      ctx.globalAlpha = (1 - t) * flicker;
+      ctx.fillStyle = '#fff';
+      const ch = WAVE_CHARS[Math.floor(Math.random() * WAVE_CHARS.length)];
+      ctx.fillText(ch, x, y);
+    }
   }
+  ctx.restore();
   if (ripples.length) requestAnimationFrame(() => drawRipples(canvas.width, canvas.height));
 }
 
@@ -225,23 +237,39 @@ function glitch(W, H) {
   ctx.restore();
 }
 
-let timeLeft = 30;
-let paintTimer = null;
-let countdownTimer = null;
+const CYCLE_SECONDS = 30;
+let timeLeft = CYCLE_SECONDS;
+let cycleDeadline = 0;
+let lastPaintedSecond = -1;
+let running = false;
 
 function startCycle() {
-  timeLeft = 30;
-  paint();
-  paintTimer = setInterval(paint, 1000);
-  countdownTimer = setInterval(() => {
-    timeLeft--;
-    if (timeLeft <= 0) blackout();
-  }, 1000);
+  running = true;
+  cycleDeadline = Date.now() + CYCLE_SECONDS * 1000;
+  lastPaintedSecond = -1;
+  tick();
+}
+
+function tick() {
+  if (!running) return;
+  const remainingMs = cycleDeadline - Date.now();
+  timeLeft = Math.max(0, Math.ceil(remainingMs / 1000));
+
+  const elapsedSecond = CYCLE_SECONDS - timeLeft;
+  if (elapsedSecond !== lastPaintedSecond) {
+    lastPaintedSecond = elapsedSecond;
+    paint();
+  }
+
+  if (remainingMs <= 0) {
+    blackout();
+    return;
+  }
+  requestAnimationFrame(tick);
 }
 
 function blackout() {
-  clearInterval(paintTimer);
-  clearInterval(countdownTimer);
+  running = false;
   canvas.style.filter = 'none';
 
   const W = canvas.width, H = canvas.height;
@@ -256,7 +284,7 @@ function blackout() {
     ctx.arc(W / 2, H / 2, H * 0.004, 0, Math.PI * 2);
     ctx.fill();
 
-    setTimeout(startCycle, 3000);
+    setTimeout(startCycle, 1500);
   }, 2000);
 }
 
