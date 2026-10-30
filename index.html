@@ -31,6 +31,22 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
+const PHRASES = [
+  ['SOMETHING', 'IS COMING'],
+  ['THEY SEE', 'YOU'],
+  ['WAKE', 'UP'],
+  ['IT IS', 'HERE'],
+  ['NOT', 'ALONE'],
+  ['LOOK', 'BEHIND YOU'],
+];
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+function randomWord(len) {
+  let s = '';
+  for (let i = 0; i < len; i++) s += LETTERS[Math.floor(Math.random() * LETTERS.length)];
+  return s;
+}
+
 function drawText() {
   const w = text.width, h = text.height;
   tctx.clearRect(0, 0, w, h);
@@ -39,10 +55,18 @@ function drawText() {
   tctx.textBaseline = 'middle';
   tctx.font = `bold ${Math.round(w / 9)}px sans-serif`;
 
+  let line1, line2;
+  if (Math.random() < 0.15) {
+    [line1, line2] = PHRASES[Math.floor(Math.random() * PHRASES.length)];
+  } else {
+    line1 = randomWord(5 + Math.floor(Math.random() * 5));
+    line2 = randomWord(4 + Math.floor(Math.random() * 6));
+  }
+
   const cx = w * (0.3 + Math.random() * 0.4);
   const cy = h * (0.3 + Math.random() * 0.4);
-  tctx.fillText('SOMETHING', cx, cy - h * 0.06);
-  tctx.fillText('IS COMING', cx, cy + h * 0.06);
+  tctx.fillText(line1, cx, cy - h * 0.06);
+  tctx.fillText(line2, cx, cy + h * 0.06);
 }
 
 const PIXEL = 1; // 1 внутренний пиксель = 0.5 CSS-пикселя
