@@ -7,22 +7,15 @@
 <style>
   html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
   canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
-  #c, #flicker { position: fixed; top: 0; left: 0; }
-  #flicker { mix-blend-mode: overlay; opacity: 0.5; pointer-events: none; }
+  #c { position: fixed; top: 0; left: 0; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<canvas id="flicker"></canvas>
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
-
-const flicker = document.getElementById('flicker');
-const fctx = flicker.getContext('2d');
-fctx.imageSmoothingEnabled = false;
-const FLICKER_SCALE = 6; // низкое разрешение шума "снега" для быстрой анимации
 
 const text = document.createElement('canvas');
 const tctx = text.getContext('2d');
@@ -35,11 +28,6 @@ function resize() {
   canvas.height = h;
   text.width = w;
   text.height = h;
-
-  flicker.width = w;
-  flicker.height = h;
-  flicker.style.width = '100vw';
-  flicker.style.height = '100vh';
 }
 window.addEventListener('resize', resize);
 resize();
@@ -84,6 +72,43 @@ function drawText() {
 
 const PIXEL = 1; // 1 внутренний пиксель = 0.5 CSS-пикселя
 
+// "адрес" текущей картинки, как у книги в Библиотеке Вавилона
+function randomAddress() {
+  const chars = '0123456789abcdef';
+  let s = '';
+  for (let i = 0; i < 24; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+function drawAddress(W, H) {
+  ctx.font = `${Math.round(H * 0.012)}px monospace`;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'bottom';
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillText(randomAddress(), W - H * 0.015, H - H * 0.015);
+}
+
+// "залипшие" пиксели — несколько точек держат один цвет пару кадров
+const stuckPixels = new Map();
+function updateStuckPixels(W, H) {
+  for (const [key, p] of stuckPixels) {
+    p.life--;
+    if (p.life <= 0) stuckPixels.delete(key);
+  }
+  if (Math.random() < 0.4) {
+    const n = 5 + Math.floor(Math.random() * 20);
+    for (let i = 0; i < n; i++) {
+      const gx = Math.floor(Math.random() * W);
+      const gy = Math.floor(Math.random() * H);
+      const r = Math.random() < 0.5 ? 255 : 0;
+      stuckPixels.set(`${gx},${gy}`, {
+        r, g: Math.random() < 0.5 ? 255 : 0, b: Math.random() < 0.5 ? 255 : 0,
+        life: 2 + Math.floor(Math.random() * 3),
+      });
+    }
+  }
+}
+
 function paint() {
   const W = canvas.width, H = canvas.height;
   canvas.style.filter = `hue-rotate(${Math.floor(Math.random() * 360)}deg)`;
@@ -99,16 +124,27 @@ function paint() {
   const boostG = boost * (0.5 + 0.5 * Math.cos(hue - 2.094));
   const boostB = boost * (0.5 + 0.5 * Math.cos(hue + 2.094));
 
+  updateStuckPixels(gw, gh);
+
   const img = ctx.createImageData(gw, gh);
   const data = img.data;
   for (let gy = 0; gy < gh; gy++) {
     for (let gx = 0; gx < gw; gx++) {
+      const i = (gy * gw + gx) * 4;
+      const stuck = stuckPixels.get(`${gx},${gy}`);
+      if (stuck) {
+        data[i] = stuck.r;
+        data[i + 1] = stuck.g;
+        data[i + 2] = stuck.b;
+        data[i + 3] = 255;
+        continue;
+      }
+
       const px = Math.min(W - 1, gx * pixel);
       const py = Math.min(H - 1, gy * pixel);
       const mi = (py * W + px) * 4;
       const onText = mask[mi + 3] > 0;
 
-      const i = (gy * gw + gx) * 4;
       data[i] = Math.min(255, Math.random() * 256 + (onText ? boostR : 0));
       data[i + 1] = Math.min(255, Math.random() * 256 + (onText ? boostG : 0));
       data[i + 2] = Math.min(255, Math.random() * 256 + (onText ? boostB : 0));
@@ -133,6 +169,8 @@ function paint() {
 
   // редкий цифровой глитч
   if (Math.random() < 0.12) glitch(W, H);
+
+  drawAddress(W, H);
 }
 
 function glitch(W, H) {
@@ -150,34 +188,8 @@ function glitch(W, H) {
   ctx.restore();
 }
 
-function drawFlicker() {
-  const W = flicker.width, H = flicker.height;
-  const gw = Math.ceil(W / FLICKER_SCALE), gh = Math.ceil(H / FLICKER_SCALE);
-  const img = fctx.createImageData(gw, gh);
-  const data = img.data;
-  for (let i = 0; i < data.length; i += 4) {
-    const v = Math.random() * 256;
-    data[i] = v;
-    data[i + 1] = v;
-    data[i + 2] = v;
-    data[i + 3] = 255;
-  }
-  const tmp = document.createElement('canvas');
-  tmp.width = gw;
-  tmp.height = gh;
-  tmp.getContext('2d').putImageData(img, 0, 0);
-
-  fctx.imageSmoothingEnabled = false;
-  // старый кадр не стирается полностью — остаётся лёгкий шлейф/послеобраз
-  fctx.globalAlpha = 0.6;
-  fctx.drawImage(tmp, 0, 0, gw, gh, 0, 0, W, H);
-  fctx.globalAlpha = 1;
-  requestAnimationFrame(drawFlicker);
-}
-
 paint();
 setInterval(paint, 1000);
-drawFlicker();
 </script>
 </body>
 </html>
