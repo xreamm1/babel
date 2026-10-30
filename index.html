@@ -7,20 +7,15 @@
 <style>
   html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
   canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
-  #c, #sparks { position: fixed; top: 0; left: 0; }
-  #sparks { mix-blend-mode: screen; pointer-events: none; }
+  #c { position: fixed; top: 0; left: 0; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<canvas id="sparks"></canvas>
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
-
-const sparks = document.getElementById('sparks');
-const sctx = sparks.getContext('2d');
 
 const text = document.createElement('canvas');
 const tctx = text.getContext('2d');
@@ -33,9 +28,6 @@ function resize() {
   canvas.height = h;
   text.width = w;
   text.height = h;
-
-  sparks.width = window.innerWidth;
-  sparks.height = window.innerHeight;
 }
 window.addEventListener('resize', resize);
 resize();
@@ -112,46 +104,6 @@ function drawTimer(W, H) {
   ctx.textBaseline = 'top';
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.fillText(String(timeLeft).padStart(2, '0'), H * 0.015, H * 0.015);
-}
-
-// волна от клика/тапа
-const ripples = [];
-function addRipple(x, y) {
-  const wasEmpty = ripples.length === 0;
-  ripples.push({ x: x * SCALE, y: y * SCALE, start: performance.now() });
-  if (wasEmpty) requestAnimationFrame(() => drawRipples(canvas.width, canvas.height));
-}
-canvas.addEventListener('pointerdown', e => addRipple(e.clientX, e.clientY));
-
-const WAVE_CHARS = '01XO+*#%&$ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
-function drawRipples(W, H) {
-  const now = performance.now();
-  ctx.save();
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = `bold ${Math.round(H * 0.02)}px monospace`;
-
-  for (let i = ripples.length - 1; i >= 0; i--) {
-    const r = ripples[i];
-    const t = (now - r.start) / 900;
-    if (t >= 1) { ripples.splice(i, 1); continue; }
-    const radius = t * H * 0.35;
-    const count = Math.max(8, Math.floor(radius / (H * 0.025)));
-    for (let a = 0; a < count; a++) {
-      const angle = (a / count) * Math.PI * 2 + t * 3;
-      const x = r.x + Math.cos(angle) * radius;
-      const y = r.y + Math.sin(angle) * radius;
-      // символы мерцают: то темнеют, то светлеют
-      const flicker = 0.4 + 0.6 * Math.abs(Math.sin(now / 90 + a * 1.7));
-      ctx.globalAlpha = (1 - t) * flicker;
-      ctx.fillStyle = '#fff';
-      const ch = WAVE_CHARS[Math.floor(Math.random() * WAVE_CHARS.length)];
-      ctx.fillText(ch, x, y);
-    }
-  }
-  ctx.restore();
-  if (ripples.length) requestAnimationFrame(() => drawRipples(canvas.width, canvas.height));
 }
 
 // "залипшие" пиксели — несколько точек держат один цвет пару кадров
@@ -310,60 +262,22 @@ function blackout() {
   }, 2000);
 }
 
-// отдельный лёгкий слой "искр": точки дрейфуют в случайном направлении
-// и плавно загораются (fade-in), а не вспыхивают сразу
-let driftX = (Math.random() - 0.5) * 0.6;
-let driftY = (Math.random() - 0.5) * 0.6;
+// точки, которые появляются каждую секунду, между обновлениями слегка дрейфуют
+let driftX = (Math.random() - 0.5) * 0.8;
+let driftY = (Math.random() - 0.5) * 0.8;
 let lastDriftChange = performance.now();
 
-const particles = [];
-const SPARK_FADE_FRAMES = 20;
-
-function sparkLoop() {
+function driftLoop() {
   const now = performance.now();
-
-  // раз в пару секунд меняем направление дрейфа
-  if (now - lastDriftChange > 2000 + Math.random() * 2000) {
-    driftX = (Math.random() - 0.5) * 0.6;
-    driftY = (Math.random() - 0.5) * 0.6;
+  if (now - lastDriftChange > 1500 + Math.random() * 1500) {
+    driftX = (Math.random() - 0.5) * 0.8;
+    driftY = (Math.random() - 0.5) * 0.8;
     lastDriftChange = now;
   }
-
-  const W = sparks.width, H = sparks.height;
-
-  // сдвигаем всё, что уже горит, и слегка гасим — создаёт дрейф + затухание следа
-  sctx.globalCompositeOperation = 'source-over';
-  sctx.drawImage(sparks, driftX, driftY);
-  sctx.globalCompositeOperation = 'destination-out';
-  sctx.fillStyle = 'rgba(0,0,0,0.04)';
-  sctx.fillRect(0, 0, W, H);
-  sctx.globalCompositeOperation = 'source-over';
-
-  // зажигаем несколько новых точек
-  if (Math.random() < 0.9) {
-    const n = 2 + Math.floor(Math.random() * 6);
-    for (let i = 0; i < n; i++) {
-      particles.push({
-        x: Math.random() * W,
-        y: Math.random() * H,
-        color: `${Math.random() * 255 | 0},${Math.random() * 255 | 0},${Math.random() * 255 | 0}`,
-        age: 0,
-      });
-    }
-  }
-
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i];
-    p.age++;
-    const alpha = Math.min(1, p.age / SPARK_FADE_FRAMES);
-    sctx.fillStyle = `rgba(${p.color},${alpha})`;
-    sctx.fillRect(p.x, p.y, 1.5, 1.5);
-    if (p.age >= SPARK_FADE_FRAMES) particles.splice(i, 1);
-  }
-
-  requestAnimationFrame(sparkLoop);
+  if (running) ctx.drawImage(canvas, driftX, driftY);
+  requestAnimationFrame(driftLoop);
 }
-sparkLoop();
+driftLoop();
 
 startCycle();
 </script>
