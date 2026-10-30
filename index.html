@@ -7,15 +7,20 @@
 <style>
   html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
   canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
-  #c { position: fixed; top: 0; left: 0; }
+  #c, #movers { position: fixed; top: 0; left: 0; }
+  #movers { mix-blend-mode: screen; pointer-events: none; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<canvas id="movers"></canvas>
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
+
+const movers = document.getElementById('movers');
+const mctx = movers.getContext('2d');
 
 const text = document.createElement('canvas');
 const tctx = text.getContext('2d');
@@ -28,6 +33,9 @@ function resize() {
   canvas.height = h;
   text.width = w;
   text.height = h;
+
+  movers.width = window.innerWidth;
+  movers.height = window.innerHeight;
 }
 window.addEventListener('resize', resize);
 resize();
@@ -262,22 +270,38 @@ function blackout() {
   }, 2000);
 }
 
-// точки, которые появляются каждую секунду, между обновлениями слегка дрейфуют
-let driftX = (Math.random() - 0.5) * 0.8;
-let driftY = (Math.random() - 0.5) * 0.8;
-let lastDriftChange = performance.now();
-
-function driftLoop() {
-  const now = performance.now();
-  if (now - lastDriftChange > 1500 + Math.random() * 1500) {
-    driftX = (Math.random() - 0.5) * 0.8;
-    driftY = (Math.random() - 0.5) * 0.8;
-    lastDriftChange = now;
-  }
-  if (running) ctx.drawImage(canvas, driftX, driftY);
-  requestAnimationFrame(driftLoop);
+// точки: каждая летит в свою случайную сторону и отскакивает от стен
+const MOVER_COUNT = 250;
+const moverDots = [];
+for (let i = 0; i < MOVER_COUNT; i++) {
+  const angle = Math.random() * Math.PI * 2;
+  const speed = 0.6 + Math.random() * 1.4;
+  moverDots.push({
+    x: Math.random() * window.innerWidth,
+    y: Math.random() * window.innerHeight,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    color: `${Math.random() * 255 | 0},${Math.random() * 255 | 0},${Math.random() * 255 | 0}`,
+  });
 }
-driftLoop();
+
+function moversLoop() {
+  const W = movers.width, H = movers.height;
+  mctx.clearRect(0, 0, W, H);
+  for (const p of moverDots) {
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.x < 0) { p.x = 0; p.vx *= -1; }
+    else if (p.x > W) { p.x = W; p.vx *= -1; }
+    if (p.y < 0) { p.y = 0; p.vy *= -1; }
+    else if (p.y > H) { p.y = H; p.vy *= -1; }
+
+    mctx.fillStyle = `rgb(${p.color})`;
+    mctx.fillRect(p.x, p.y, 2, 2);
+  }
+  requestAnimationFrame(moversLoop);
+}
+moversLoop();
 
 startCycle();
 </script>
