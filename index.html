@@ -54,7 +54,8 @@ function drawText() {
   tctx.fillStyle = '#fff';
   tctx.textAlign = 'center';
   tctx.textBaseline = 'middle';
-  tctx.font = `bold ${Math.round(w / 9)}px sans-serif`;
+  const fontSize = Math.round(w / 9);
+  tctx.font = `bold ${fontSize}px sans-serif`;
 
   let line1, line2;
   if (Math.random() < 0.15) {
@@ -66,11 +67,20 @@ function drawText() {
 
   const cx = w * (0.3 + Math.random() * 0.4);
   const cy = h * (0.3 + Math.random() * 0.4);
-  tctx.fillText(line1, cx, cy - h * 0.06);
-  tctx.fillText(line2, cx, cy + h * 0.06);
-}
+  const y1 = cy - h * 0.06;
+  const y2 = cy + h * 0.06;
+  tctx.fillText(line1, cx, y1);
+  tctx.fillText(line2, cx, y2);
 
-const PIXEL = 1; // 1 внутренний пиксель = 0.5 CSS-пикселя
+  // только область с текстом — не нужно сканировать весь экран
+  const halfWidth = Math.max(tctx.measureText(line1).width, tctx.measureText(line2).width) / 2;
+  const pad = fontSize * 0.4;
+  const x0 = Math.max(0, Math.floor(cx - halfWidth - pad));
+  const x1 = Math.min(w, Math.ceil(cx + halfWidth + pad));
+  const y0 = Math.max(0, Math.floor(y1 - fontSize * 0.7));
+  const y1b = Math.min(h, Math.ceil(y2 + fontSize * 0.7));
+  return { x0, y0, w: x1 - x0, h: y1b - y0 };
+}
 
 // "адрес" текущей картинки, как у книги в Библиотеке Вавилона
 function randomAddress() {
@@ -148,65 +158,69 @@ function updateStuckPixels(W, H) {
     for (let i = 0; i < n; i++) {
       const gx = Math.floor(Math.random() * W);
       const gy = Math.floor(Math.random() * H);
-      const r = Math.random() < 0.5 ? 255 : 0;
       stuckPixels.set(`${gx},${gy}`, {
-        r, g: Math.random() < 0.5 ? 255 : 0, b: Math.random() < 0.5 ? 255 : 0,
+        r: Math.random() < 0.5 ? 255 : 0,
+        g: Math.random() < 0.5 ? 255 : 0,
+        b: Math.random() < 0.5 ? 255 : 0,
         life: 2 + Math.floor(Math.random() * 3),
       });
     }
   }
 }
 
+// переиспользуем один и тот же буфер вместо аллокации каждую секунду
+let cachedImg = null;
+let cachedW = 0, cachedH = 0;
+
 function paint() {
   const W = canvas.width, H = canvas.height;
   canvas.style.filter = `hue-rotate(${Math.floor(Math.random() * 360)}deg)`;
-  const pixel = PIXEL;
-  const gw = Math.ceil(W / pixel), gh = Math.ceil(H / pixel);
 
-  drawText();
-  const mask = tctx.getImageData(0, 0, W, H).data;
+  const bbox = drawText();
 
-  const boost = 22 + Math.random() * 12;
-  const hue = Math.random() * Math.PI * 2;
-  const boostR = boost * (0.5 + 0.5 * Math.cos(hue));
-  const boostG = boost * (0.5 + 0.5 * Math.cos(hue - 2.094));
-  const boostB = boost * (0.5 + 0.5 * Math.cos(hue + 2.094));
+  if (!cachedImg || cachedW !== W || cachedH !== H) {
+    cachedImg = ctx.createImageData(W, H);
+    cachedW = W;
+    cachedH = H;
+  }
+  const img = cachedImg;
+  const buf32 = new Uint32Array(img.data.buffer);
 
-  updateStuckPixels(gw, gh);
+  // один быстрый проход: 1 random на пиксель вместо 3 + ветвлений
+  for (let i = 0; i < buf32.length; i++) {
+    buf32[i] = 0xff000000 | ((Math.random() * 0x1000000) | 0);
+  }
 
-  const img = ctx.createImageData(gw, gh);
-  const data = img.data;
-  for (let gy = 0; gy < gh; gy++) {
-    for (let gx = 0; gx < gw; gx++) {
-      const i = (gy * gw + gx) * 4;
-      const stuck = stuckPixels.get(`${gx},${gy}`);
-      if (stuck) {
-        data[i] = stuck.r;
-        data[i + 1] = stuck.g;
-        data[i + 2] = stuck.b;
-        data[i + 3] = 255;
-        continue;
+  // подсветка текста — только в его маленьком прямоугольнике, а не по всему экрану
+  if (bbox.w > 0 && bbox.h > 0) {
+    const boost = 22 + Math.random() * 12;
+    const hue = Math.random() * Math.PI * 2;
+    const boostR = boost * (0.5 + 0.5 * Math.cos(hue)) | 0;
+    const boostG = boost * (0.5 + 0.5 * Math.cos(hue - 2.094)) | 0;
+    const boostB = boost * (0.5 + 0.5 * Math.cos(hue + 2.094)) | 0;
+
+    const mask = tctx.getImageData(bbox.x0, bbox.y0, bbox.w, bbox.h).data;
+    for (let y = 0; y < bbox.h; y++) {
+      for (let x = 0; x < bbox.w; x++) {
+        if (mask[(y * bbox.w + x) * 4 + 3] === 0) continue;
+        const idx = (bbox.y0 + y) * W + (bbox.x0 + x);
+        const v = buf32[idx];
+        const r = Math.min(255, (v & 0xff) + boostR);
+        const g = Math.min(255, ((v >>> 8) & 0xff) + boostG);
+        const b = Math.min(255, ((v >>> 16) & 0xff) + boostB);
+        buf32[idx] = 0xff000000 | (b << 16) | (g << 8) | r;
       }
-
-      const px = Math.min(W - 1, gx * pixel);
-      const py = Math.min(H - 1, gy * pixel);
-      const mi = (py * W + px) * 4;
-      const onText = mask[mi + 3] > 0;
-
-      data[i] = Math.min(255, Math.random() * 256 + (onText ? boostR : 0));
-      data[i + 1] = Math.min(255, Math.random() * 256 + (onText ? boostG : 0));
-      data[i + 2] = Math.min(255, Math.random() * 256 + (onText ? boostB : 0));
-      data[i + 3] = 255;
     }
   }
 
-  const tmp = document.createElement('canvas');
-  tmp.width = gw;
-  tmp.height = gh;
-  tmp.getContext('2d').putImageData(img, 0, 0);
+  // "залипшие" пиксели — точечно, без прохода по всему экрану
+  updateStuckPixels(W, H);
+  for (const [key, p] of stuckPixels) {
+    const [gx, gy] = key.split(',');
+    buf32[Number(gy) * W + Number(gx)] = 0xff000000 | (p.b << 16) | (p.g << 8) | p.r;
+  }
 
-  ctx.clearRect(0, 0, W, H);
-  ctx.drawImage(tmp, 0, 0, gw, gh, 0, 0, W, H);
+  ctx.putImageData(img, 0, 0);
 
   // виньетка для атмосферы
   const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.75);
