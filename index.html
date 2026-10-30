@@ -6,7 +6,7 @@
 <title>Gallery of Babel</title>
 <style>
   html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
-  canvas { display: block; width: 100vw; height: 100vh; }
+  canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
 </style>
 </head>
 <body>
@@ -14,62 +14,31 @@
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
+const PIXEL = 2; // размер "зерна" шума
 
 function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  canvas.width = Math.ceil(window.innerWidth / PIXEL);
+  canvas.height = Math.ceil(window.innerHeight / PIXEL);
 }
 window.addEventListener('resize', () => { resize(); paint(); });
 resize();
 
-function rand(min, max) { return Math.random() * (max - min) + min; }
-function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
-
-function randomColor(alpha) {
-  const h = randInt(0, 360);
-  const s = randInt(30, 100);
-  const l = randInt(20, 80);
-  return `hsla(${h}, ${s}%, ${l}%, ${alpha})`;
-}
-
 function paint() {
   const w = canvas.width, h = canvas.height;
-
-  ctx.fillStyle = randomColor(1);
-  ctx.fillRect(0, 0, w, h);
-
-  const shapes = randInt(20, 80);
-  for (let i = 0; i < shapes; i++) {
-    const type = randInt(0, 2);
-    ctx.globalAlpha = rand(0.2, 0.9);
-    ctx.fillStyle = randomColor(1);
-    ctx.strokeStyle = randomColor(1);
-    ctx.lineWidth = rand(1, 8);
-
-    if (type === 0) {
-      const x = rand(0, w), y = rand(0, h), r = rand(5, Math.max(w, h) / 3);
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      Math.random() > 0.5 ? ctx.fill() : ctx.stroke();
-    } else if (type === 1) {
-      const x = rand(0, w), y = rand(0, h);
-      const rw = rand(10, w / 2), rh = rand(10, h / 2);
-      Math.random() > 0.5 ? ctx.fillRect(x, y, rw, rh) : ctx.strokeRect(x, y, rw, rh);
-    } else {
-      ctx.beginPath();
-      ctx.moveTo(rand(0, w), rand(0, h));
-      const pts = randInt(2, 5);
-      for (let j = 0; j < pts; j++) ctx.lineTo(rand(0, w), rand(0, h));
-      ctx.closePath();
-      Math.random() > 0.5 ? ctx.fill() : ctx.stroke();
-    }
+  const img = ctx.createImageData(w, h);
+  const data = img.data;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = Math.random() * 256;
+    data[i + 1] = Math.random() * 256;
+    data[i + 2] = Math.random() * 256;
+    data[i + 3] = 255;
   }
-  ctx.globalAlpha = 1;
+  ctx.putImageData(img, 0, 0);
 }
 
 function loop() {
   paint();
-  setTimeout(loop, rand(1000, 10000));
+  setTimeout(loop, Math.random() * 9000 + 1000);
 }
 loop();
 </script>
