@@ -7,14 +7,22 @@
 <style>
   html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
   canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
+  #c, #flicker { position: fixed; top: 0; left: 0; }
+  #flicker { mix-blend-mode: overlay; opacity: 0.5; pointer-events: none; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<canvas id="flicker"></canvas>
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
+
+const flicker = document.getElementById('flicker');
+const fctx = flicker.getContext('2d');
+fctx.imageSmoothingEnabled = false;
+const FLICKER_SCALE = 6; // низкое разрешение шума "снега" для быстрой анимации
 
 const text = document.createElement('canvas');
 const tctx = text.getContext('2d');
@@ -27,6 +35,11 @@ function resize() {
   canvas.height = h;
   text.width = w;
   text.height = h;
+
+  flicker.width = w;
+  flicker.height = h;
+  flicker.style.width = '100vw';
+  flicker.style.height = '100vh';
 }
 window.addEventListener('resize', resize);
 resize();
@@ -136,8 +149,32 @@ function glitch(W, H) {
   ctx.restore();
 }
 
+function drawFlicker() {
+  const W = flicker.width, H = flicker.height;
+  const gw = Math.ceil(W / FLICKER_SCALE), gh = Math.ceil(H / FLICKER_SCALE);
+  const img = fctx.createImageData(gw, gh);
+  const data = img.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const v = Math.random() * 256;
+    data[i] = v;
+    data[i + 1] = v;
+    data[i + 2] = v;
+    data[i + 3] = 255;
+  }
+  const tmp = document.createElement('canvas');
+  tmp.width = gw;
+  tmp.height = gh;
+  tmp.getContext('2d').putImageData(img, 0, 0);
+
+  fctx.imageSmoothingEnabled = false;
+  fctx.clearRect(0, 0, W, H);
+  fctx.drawImage(tmp, 0, 0, gw, gh, 0, 0, W, H);
+  requestAnimationFrame(drawFlicker);
+}
+
 paint();
 setInterval(paint, 1000);
+drawFlicker();
 </script>
 </body>
 </html>
